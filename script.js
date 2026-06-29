@@ -203,7 +203,7 @@ function loadFunction(){currentFn=document.getElementById('func').value;loadScen
 function shuffleName(){
   charNameVal=NAMES[Math.floor(Math.random()*NAMES.length)];
   document.getElementById('charName').textContent=charNameVal;
-  renderPrep();
+  renderPrep();updatePlayerView();
 }
 
 function renderPrep(){
@@ -229,24 +229,45 @@ function loadImg(e){
 }
 
 function openPlayerView(){
-  pv=window.open('','gmPlayerView','width=920,height=700');
+  pv=window.open('','gmPlayerView','width=920,height=760');
   if(!pv){alert('Pop-up blocked — allow pop-ups for this page to use Player View.');return;}
   pv.document.open();
   pv.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>The Scene</title>
   <style>
     html,body{margin:0;height:100%}
     body{font-family:"Segoe UI",system-ui,Arial,sans-serif;background:#0f1722;color:#eef3f8;display:flex;flex-direction:column}
-    #pvImg{width:100%;max-height:48vh;object-fit:cover;display:none}
-    .pvwrap{flex:1;padding:34px 44px;max-width:920px;margin:0 auto;width:100%;box-sizing:border-box}
+    #pvImg{width:100%;max-height:42vh;object-fit:cover;display:none}
+    .pvwrap{flex:1;padding:30px 44px;max-width:920px;margin:0 auto;width:100%;box-sizing:border-box}
     #pvScene{font-size:1.55rem;line-height:1.55;white-space:pre-wrap}
     #pvScene.empty{color:#5b6f85;font-style:italic}
-    #pvPhr{margin-top:28px;padding-top:18px;border-top:1px solid #2a3a4d;display:none}
+    #pvPhr{margin-top:26px;padding-top:18px;border-top:1px solid #2a3a4d;display:none}
     #pvPhr h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#7fb6df;margin:0 0 10px}
     .pvchip{display:inline-block;border:1px solid #33475a;border-radius:999px;padding:7px 14px;margin:0 7px 8px 0;font-size:1.02rem;color:#dbe6f0}
+    .pvdice{display:flex;align-items:center;gap:20px;padding:20px 44px;border-bottom:1px solid #2a3a4d;flex-wrap:wrap}
+    #pvDie{width:74px;height:74px;border-radius:16px;background:#fff;color:#0f1722;display:grid;place-items:center;font-size:2.3rem;font-weight:800;box-shadow:0 4px 14px rgba(0,0,0,.4);user-select:none}
+    #pvDie.rolling{animation:pvshake .5s ease}
+    @keyframes pvshake{0%,100%{transform:translate(0,0) rotate(0)}25%{transform:translate(-3px,2px) rotate(-7deg)}50%{transform:translate(3px,-2px) rotate(6deg)}75%{transform:translate(-2px,1px) rotate(-4deg)}}
+    #pvRollBtn{background:#6b3fa0;color:#fff;border:0;border-radius:12px;padding:15px 26px;font-size:1.08rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+    #pvRollBtn:active{transform:translateY(1px)}
+    #pvResult{flex:1;min-width:160px}
+    .pvtag{display:inline-block;font-weight:800;font-size:1.15rem;padding:7px 18px;border-radius:10px;color:#fff}
+    .pvclock{margin-left:auto;font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:700;background:#1b2632;border:1px solid #2a3a4d;color:#cfe0f0;border-radius:10px;padding:6px 13px}
+    .pvclock.low{background:#b23b3b;color:#fff;border-color:#b23b3b}
+    .pvgoal{padding:13px 44px;background:#13202c;border-bottom:1px solid #2a3a4d;font-size:1rem;color:#bccadb;line-height:1.5}
+    .pvgoal .g-k{color:#7fb6df;font-weight:700}
+    .pvgoal .g-goal{color:#eef3f8;font-weight:600}
   </style></head>
-  <body><img id="pvImg"><div class="pvwrap"><div id="pvScene"></div><div id="pvPhr"></div></div></body></html>`);
+  <body>
+    <div class="pvdice"><div id="pvDie">–</div><button id="pvRollBtn">🎲 Roll the dice</button><div id="pvResult"></div><div id="pvClock" class="pvclock">30:00</div></div>
+    <div id="pvGoal" class="pvgoal"></div>
+    <img id="pvImg"><div class="pvwrap"><div id="pvScene"></div><div id="pvPhr"></div></div>
+  </body></html>`);
   pv.document.close();
+  const btn=pv.document.getElementById('pvRollBtn');
+  if(btn) btn.onclick=doRoll;
+  if(lastN) applyResult(lastN); // reflect any roll already made
   updatePlayerView();
+  paint(); // sync the mirrored clock
 }
 
 function updatePlayerView(){
@@ -263,6 +284,13 @@ function updatePlayerView(){
       const groups=FUNCTIONS[currentFn][level];
       phrBox.innerHTML='<h3>Useful language</h3>'+Object.values(groups).flat().map(p=>`<span class="pvchip">${p}</span>`).join('');
     }else phrBox.style.display='none';
+  }
+  // goal / identity strip — participant's compass (their goal is not secret)
+  const goalEl=pv.document.getElementById('pvGoal');
+  if(goalEl){
+    const you=document.getElementById('roleYou').textContent.trim();
+    const goal=document.getElementById('mission').textContent.trim();
+    goalEl.innerHTML=`<span class="g-k">You:</span> ${you} &nbsp;·&nbsp; <span class="g-k">Talking to:</span> ${charNameVal} &nbsp;·&nbsp; 🎯 <span class="g-goal">${goal}</span>`;
   }
 }
 
@@ -300,22 +328,39 @@ function buildLegend(){
   });
 }
 
-/* ---------- dice ---------- */
-function rollDie(){
-  const die=document.getElementById('die');
-  die.classList.remove('rolling');void die.offsetWidth;die.classList.add('rolling');
-  let ticks=0;const spin=setInterval(()=>{
-    die.textContent=1+Math.floor(Math.random()*6);ticks++;
-    if(ticks>8){clearInterval(spin);settle();}
+/* ---------- dice (shared between GM console + Player View) ---------- */
+let lastN=0;
+
+function rollDie(){doRoll();} // GM "Roll d6" button
+
+function doRoll(){
+  const n=1+Math.floor(Math.random()*6);
+  const gmDie=document.getElementById('die');
+  const pvDie=(pv&&!pv.closed)?pv.document.getElementById('pvDie'):null;
+  shakeDie(gmDie); if(pvDie) shakeDie(pvDie);
+  let ticks=0;
+  const iv=setInterval(()=>{
+    const r=1+Math.floor(Math.random()*6);
+    gmDie.textContent=r; if(pvDie) pvDie.textContent=r;
+    if(++ticks>8){clearInterval(iv); gmDie.textContent=n; if(pvDie) pvDie.textContent=n; applyResult(n);}
   },55);
-  function settle(){
-    const n=1+Math.floor(Math.random()*6);
-    die.textContent=n;
-    const o=OUTCOMES[n-1];
-    document.getElementById('result').innerHTML=
-      `<span class="tag" style="background:${o.color}">${n} · ${o.label}</span><p>${o.gm}</p>`;
-    document.querySelectorAll('#legend tr').forEach(r=>r.classList.remove('hit'));
-    document.getElementById('leg'+n).classList.add('hit');
+}
+
+function shakeDie(el){el.classList.remove('rolling');void el.offsetWidth;el.classList.add('rolling');}
+
+function applyResult(n){
+  lastN=n;
+  const o=OUTCOMES[n-1];
+  // GM console: number + label + private narration prompt
+  document.getElementById('result').innerHTML=
+    `<span class="tag" style="background:${o.color}">${n} · ${o.label}</span><p>${o.gm}</p>`;
+  document.querySelectorAll('#legend tr').forEach(r=>r.classList.remove('hit'));
+  const lg=document.getElementById('leg'+n); if(lg) lg.classList.add('hit');
+  // Player View: number + label only (no GM narration)
+  if(pv&&!pv.closed){
+    const pr=pv.document.getElementById('pvResult');
+    if(pr) pr.innerHTML=`<span class="pvtag" style="background:${o.color}">${n} · ${o.label}</span>`;
+    const pd=pv.document.getElementById('pvDie'); if(pd) pd.textContent=n;
   }
 }
 
@@ -344,7 +389,8 @@ function copyCapture(){
 /* ---------- timer ---------- */
 let timer=null,remain=1800;
 function fmt(s){const m=Math.floor(s/60),x=s%60;return `${m}:${x<10?'0':''}${x}`;}
-function paint(){const c=document.getElementById('clock');c.textContent=fmt(remain);c.classList.toggle('low',remain<=120);}
+function paint(){const c=document.getElementById('clock');c.textContent=fmt(remain);c.classList.toggle('low',remain<=120);
+  if(pv&&!pv.closed){const pc=pv.document.getElementById('pvClock');if(pc){pc.textContent=fmt(remain);pc.classList.toggle('low',remain<=120);}}}
 function toggleTimer(){
   const b=document.getElementById('startBtn');
   if(timer){clearInterval(timer);timer=null;b.textContent='Start';return;}
@@ -358,5 +404,7 @@ function resetTimer(){
 
 document.getElementById('sceneText').addEventListener('input',updatePlayerView);
 document.getElementById('showPhrases').addEventListener('change',updatePlayerView);
+document.getElementById('roleYou').addEventListener('input',updatePlayerView);  // live-edit of role
+document.getElementById('mission').addEventListener('input',updatePlayerView);  // live-edit of goal
 document.getElementById('showPhrases').checked=(level==='B1');
 init();paint();
