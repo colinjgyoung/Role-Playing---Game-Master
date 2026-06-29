@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GM Console — Language RPG</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="title">
+      <h1>🎲 GM Console — Language RPG</h1>
+      <p>You are the Game Master. The die drives the story. You drive the language.</p>
+    </div>
+    <div class="toggles">
+      <div class="seg lvl" aria-label="Level">
+        <button id="lvlB1" class="active" onclick="setLevel('B1')">B1</button>
+        <button id="lvlC1" onclick="setLevel('C1')">C1</button>
+      </div>
+      <div class="seg mode" aria-label="Mode">
+        <button id="modeReal" class="active" onclick="setMode('real')">Realistic</button>
+        <button id="modeFan" onclick="setMode('fantasy')">Fantasy</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="setup">
+    <div class="fld">
+      <label for="func">This game's target function</label>
+      <select id="func" onchange="loadFunction()"></select>
+    </div>
+    <div class="fld">
+      <label for="players">Players this session · not saved 🔒</label>
+      <input id="players" class="mini" style="min-width:220px" placeholder="First names — live game only" autocomplete="off">
+    </div>
+    <div class="timerbox">
+      <div class="fld" style="gap:5px">
+        <label for="mins">Time limit</label>
+        <select id="mins" class="mini" onchange="resetTimer()">
+          <option value="10">10 min</option>
+          <option value="20">20 min</option>
+          <option value="30" selected>30 min</option>
+          <option value="45">45 min</option>
+        </select>
+      </div>
+      <div id="clock">30:00</div>
+      <button class="tbtn" id="startBtn" onclick="toggleTimer()">Start</button>
+      <button class="tbtn" onclick="resetTimer()">Reset</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: scenario + player scene -->
+    <section class="card scn">
+      <h2><span class="pill">Setup</span> The scenario</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem">Edit anything (no real names). This is your GM brief.</p>
+      <div class="line"><span class="k">You (the participant):</span> <span class="editable" contenteditable="true" id="roleYou"></span></div>
+      <div class="line"><span class="k">I'll play:</span> <strong id="charName" style="color:var(--accent)"></strong>
+        <button class="tbtn" style="padding:2px 8px;font-size:.74rem" onclick="shuffleName()">↻ name</button>
+        — <span class="editable" contenteditable="true" id="roleNpc"></span></div>
+      <div class="line"><span class="k">Situation:</span> <span class="editable" contenteditable="true" id="premise"></span></div>
+      <div class="line"><span class="k">What's at stake:</span> <span class="editable" contenteditable="true" id="stakes"></span></div>
+      <div class="mission"><strong>🎯 Mission (the participant's goal):</strong> <span class="editable" contenteditable="true" id="mission"></span></div>
+    </section>
+
+    <section class="card scene-panel">
+      <h2><span class="pill" style="background:#dceaf2;color:#2c6e8a">Show players</span> Current scene</h2>
+      <p style="margin:0 0 8px;color:var(--muted);font-size:.85rem">Type what the players see/hear now. Screen-share this. Read it aloud if you like.</p>
+      <textarea id="sceneText" placeholder="Describe the moment: where they are, who they're talking to, the tension, and what your character just said…"></textarea>
+      <img id="imgPreview" style="display:none;width:100%;max-height:150px;object-fit:cover;border-radius:10px;margin-top:10px">
+      <div class="scene-tools">
+        <button class="btn accent" onclick="openPlayerView()">🖥 Open Player View</button>
+        <input type="file" id="imgFile" accept="image/*" onchange="loadImg(event)" style="display:none">
+        <button class="btn ghost" onclick="document.getElementById('imgFile').click()">🖼 Add image</button>
+        <button class="btn ghost" onclick="speak()">🔊 Read aloud</button>
+        <button class="btn ghost" onclick="stopSpeak()">⏹ Stop</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.84rem;color:var(--muted)">
+          <input type="checkbox" id="showPhrases"> Show phrases to players
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <!-- GM DICE PANEL -->
+  <section class="gmpanel">
+    <h2>🎲 Resolve the moment</h2>
+    <p class="sub">After the participant makes their attempt in English, roll. The die sets how the <em>world</em> responds — not whether their grammar was right. Then narrate the consequence and give the scene back.</p>
+    <div class="dicewrap">
+      <div id="die">–</div>
+      <button class="rollbtn" onclick="rollDie()">Roll d6</button>
+      <div class="result" id="result">
+        <span class="tag" style="background:#44566a">Not rolled yet</span>
+        <p>Set the stakes out loud first: what does success and failure look like here?</p>
+      </div>
+    </div>
+    <div class="legend">
+      <table id="legend"></table>
+    </div>
+    <label class="houserule">
+      <input type="checkbox" id="houseRule">
+      Optional house rule: as GM, grant <strong>&nbsp;+1&nbsp;</strong> when an attempt is especially clear or well-pitched (off by default — keep die and language separate unless you want this).
+    </label>
+  </section>
+
+  <!-- GM PREP DRAWER (private improv kit) -->
+  <details class="gmprep" open>
+    <summary>🎒 GM prep — your improv kit (keep private)</summary>
+    <div class="prepbody">
+      <div class="prepcol">
+        <h4>Who you play</h4>
+        <div id="prepChar"></div>
+      </div>
+      <div class="prepcol">
+        <h4>Complications · roll low or pick one</h4>
+        <ul id="prepComp"></ul>
+      </div>
+      <div class="prepcol">
+        <h4>Upgrade triggers</h4>
+        <ul id="prepUpg"></ul>
+      </div>
+      <div class="prepcol">
+        <h4>If stuck · Landing</h4>
+        <div id="prepFall"></div>
+      </div>
+    </div>
+  </details>
+
+  <div class="grid" style="margin-top:16px">
+    <!-- phrase support -->
+    <section class="card phr">
+      <h2><span class="pill">Support</span> Useful language <span id="phrLvl" style="color:var(--muted);font-weight:500;font-size:.8rem"></span></h2>
+      <p style="margin:0 0 10px;color:var(--muted);font-size:.85rem">Tap a phrase to copy it. Show participants when they're stuck — pull it back as they grow.</p>
+      <div id="phrases"></div>
+    </section>
+
+    <!-- capture -->
+    <section class="card capture">
+      <h2><span class="pill" style="background:var(--good-soft);color:var(--good)">Capture</span> Bank it for OneNote</h2>
+      <div class="block">
+        <label>Best line(s) from this scene:</label>
+        <textarea id="capLines" placeholder="The strongest things participants actually said…"></textarea>
+      </div>
+      <div class="block">
+        <label>One phrase I'll reuse this week:</label>
+        <input type="text" id="capReuse" placeholder="e.g. Would you be open to…?">
+      </div>
+      <div class="block">
+        <label>A real situation where this helps me:</label>
+        <input type="text" id="capReal" placeholder="e.g. asking another team for data with no authority">
+      </div>
+      <div class="scene-tools">
+        <button class="btn green" onclick="copyCapture()">📋 Copy capture</button>
+        <span class="copied" id="capCopied">Copied!</span>
+      </div>
+    </section>
+  </div>
+
+  <details class="facil">
+    <summary>Facilitator notes (don't screen-share this part)</summary>
+    <div class="fbody">
+      <p><strong>The loop per round:</strong> set the scene (right panel) → state the stakes out loud → participant makes their attempt in English → <em>roll</em> → narrate the consequence to match the number → give a quick language upgrade → next beat. Aim for 3 beats: setup, complication, resolution.</p>
+      <h3>Keep it moving</h3>
+      <ul>
+        <li>The die decides the fiction; you decide the language. Don't roll to judge English.</li>
+        <li>On a low roll, make failure <em>interesting</em> — a new complication, not a dead end.</li>
+        <li>Stay in your character's voice; give one memorable trait so participants have something to react to.</li>
+        <li>End every beat on a question or pressure so the participant has something to do.</li>
+      </ul>
+      <h3>Language</h3>
+      <ul>
+        <li>Catch emergent language; bank the best lines in the Capture box live.</li>
+        <li>B1: let them lean on the phrase chips. C1: hide the chips, push tone, concision, audience.</li>
+        <li>Run the <em>same</em> function all game — one clean function beats five messy ones.</li>
+      </ul>
+      <h3>Reuse / share</h3>
+      <ul>
+        <li>No login, no install — open the link or run locally. Shareable with other trainers.</li>
+        <li>Realistic ↔ Fantasy toggle reskins the same mission; B1/C1 reskins the support.</li>
+        <li>A+ later: hand the GM seat (this panel) to a confident participant with a Copilot/Gemini prompt; the timer forces a close.</li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="footer">GM Console v2 · die drives fiction, you drive language · facilitation tool</div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
